@@ -1,5 +1,9 @@
 .PHONY: all
-all: build run
+all: fmt build run
+
+.PHONY: fmt
+fmt:
+	@go fmt ./...
 
 .PHONY: build
 build:
