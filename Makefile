@@ -1,3 +1,6 @@
+.PHONY: all
+all: build run
+
 .PHONY: build
 build:
 	@go build -o ./bin/delete_assertions ./cmd/delete_assertions.go
