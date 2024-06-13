@@ -96,6 +96,11 @@ func backupGoFilesLocal(dir string) {
 	}
 }
 
+// deleteAssertions truncates the original .go file, scans the backup file
+// line by line, and only writes to the .go file if it does not contain assert
+// content. It assumes the file is "well formed", i.e., a multiline import
+// statement ends with a single ')' on its own line and each assertion
+// only takes up a single line.
 func deleteAssertions(filepath string) {
 	infile, err := os.Open(filepath)
 	if err != nil {
@@ -115,8 +120,8 @@ func deleteAssertions(filepath string) {
 	line := ""
 	singleImport := true
 	for lineScanner.Scan() {
-		line = lineScanner.Text()
-		if strings.Compare(line[:6], "import") == 0 {
+		line = strings.TrimSpace(lineScanner.Text())
+		if len(line) >= 6 && strings.Compare(line[:6], "import") == 0 {
 			break
 		}
 		searchCount++
@@ -124,30 +129,34 @@ func deleteAssertions(filepath string) {
 		if searchCount >= 64 {
 			return
 		}
+		outfile.WriteString(lineScanner.Text() + "\n")
 	}
-	if strings.Compare(line[7:13], "assert") != 0 {
+    // Check for "import assert" (single import line special case).
+	if len(line) < 13 || (len(line) >= 13 && strings.Compare(line[7:13], "assert") != 0) {
 		outfile.WriteString(line + "\n")
 		singleImport = false
 	}
 	if !singleImport {
+        // Find the import line in a multi-line import block.
 		for lineScanner.Scan() {
-			line = lineScanner.Text()
-			fmt.Println(line[31:37])
-			if strings.Compare(line[31:37], "assert") == 0 {
+			line = strings.TrimSpace(lineScanner.Text())
+            // Skip over any assert statement.
+			if len(line) >= 6 && strings.Compare(line[:6], "assert") == 0 {
 				break
 			}
-			outfile.WriteString(line + "\n")
-			if line[0] == ')' {
+			outfile.WriteString(lineScanner.Text() + "\n")
+			if len(line) > 0 && line[0] == ')' {
 				break
 			}
 		}
 	}
-	// Scan for assert.Asserts
+	// Scan for assert code and skip.
 	for lineScanner.Scan() {
 		line = strings.TrimSpace(lineScanner.Text())
-		if strings.Compare(line[:6], "assert") != 0 {
-			outfile.WriteString(lineScanner.Text() + "\n")
+		if len(line) >= 6 && strings.Compare(line[:6], "assert") == 0 {
+			continue
 		}
+		outfile.WriteString(lineScanner.Text() + "\n")
 	}
 }
 
