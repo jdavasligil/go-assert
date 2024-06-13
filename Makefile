@@ -7,11 +7,11 @@ fmt:
 
 .PHONY: build
 build:
-	@go build -o ./bin/dass ./cmd/delete_assertions.go
+	@go build -o ./bin/dass ./cmd/dass/dass.go
 
 .PHONY: run
 run:
-	@./bin/das
+	@./bin/dass
 
 .PHONY: test
 test:

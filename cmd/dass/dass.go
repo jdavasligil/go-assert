@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+// TODO: Gracefully handle errors that shouldn't panic.
+
 func main() {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -131,16 +133,16 @@ func deleteAssertions(filepath string) {
 		}
 		outfile.WriteString(lineScanner.Text() + "\n")
 	}
-    // Check for "import assert" (single import line special case).
+	// Check for "import assert" (single import line special case).
 	if len(line) < 13 || (len(line) >= 13 && strings.Compare(line[7:13], "assert") != 0) {
 		outfile.WriteString(line + "\n")
 		singleImport = false
 	}
 	if !singleImport {
-        // Find the import line in a multi-line import block.
+		// Find the import line in a multi-line import block.
 		for lineScanner.Scan() {
 			line = strings.TrimSpace(lineScanner.Text())
-            // Skip over any assert statement.
+			// Skip over any assert statement.
 			if len(line) >= 6 && strings.Compare(line[:6], "assert") == 0 {
 				break
 			}
