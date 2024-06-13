@@ -35,9 +35,15 @@ func TestDeleteAssertions(t *testing.T) {
 
 	// Read test data into memory
 	for _, f := range files {
+		if f.IsDir() {
+			continue
+		}
 		filepath := testDir + "/" + f.Name()
 		fileType := f.Name()[:len(f.Name())-1]
 		fileIdx := int(byte(f.Name()[len(f.Name())-1]) - 48)
+		if fileIdx < 0 || fileIdx >= max_tests {
+			continue
+		}
 		if strings.Compare(fileType, "expected") == 0 {
 			content, err := os.ReadFile(filepath)
 			if err != nil {
@@ -60,8 +66,8 @@ func TestDeleteAssertions(t *testing.T) {
 	tempPath := testDir + "/" + "temp.go"
 	for idx := range testIndices {
 		os.WriteFile(tempPath, tests[idx].testfile, os.FileMode(0644))
-		backupGoFilesLocal(testDir)
-		deleteAssertionsLocal(testDir)
+		backupGoFilesRecursive(testDir)
+		deleteAssertionsRecursive(testDir)
 		got, err := os.ReadFile(tempPath)
 		if err != nil {
 			t.Fatal(err)
@@ -83,7 +89,7 @@ func TestDeleteAssertions(t *testing.T) {
 			os.WriteFile(testDir+"/"+"testdump"+string(byte(idx+48)), got, os.FileMode(0644))
 			t.Fail()
 		}
-		restoreGoFilesLocal(testDir)
+		restoreGoFilesRecursive(testDir)
 	}
 	os.Remove(tempPath)
 }

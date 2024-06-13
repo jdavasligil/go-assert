@@ -6,12 +6,14 @@ package test
 
 // if assert is the only import statement, ignore the whole line.
 import assert "github.com/jdavasligil/go-assert" //$DELETE
+import "github.com/jdavasligil/go-assert" //$DELETE
 
 // import statements for assert should also be ignored
 import (
 	"strings"
 
 	assert "github.com/jdavasligil/go-assert" //$DELETE
+	"github.com/jdavasligil/go-assert" //$DELETE
 )
 
 // foo is always positive

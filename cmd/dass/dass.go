@@ -4,12 +4,12 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 )
-
-// TODO: Gracefully handle errors that shouldn't panic.
 
 func main() {
 	dir, err := os.Getwd()
@@ -27,7 +27,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	} else if !finfo.IsDir() {
-		panic("FATAL: path is not a directory.")
+		fmt.Printf("Path: %s is not a valid directory.\n", *pathPtr)
+		return
 	}
 
 	recurseStr := ""
@@ -41,13 +42,26 @@ func main() {
 
 	if *restorePtr {
 		fmt.Printf("Restoring backups%s...", recurseStr)
-		restoreGoFilesLocal(*pathPtr)
+		if *recursePtr {
+			restoreGoFilesRecursive(*pathPtr)
+		} else {
+			restoreGoFilesLocal(*pathPtr)
+		}
 	} else {
 		fmt.Printf("Deleting assertions%s from %s%s\n", recurseStr, *pathPtr, backupStr)
-		backupGoFilesLocal(*pathPtr)
-		// either delete asserts recursively or just the target directory
-		deleteAssertionsLocal(*pathPtr)
-		// if backup is false, delete backups
+		if *recursePtr {
+			backupGoFilesRecursive(*pathPtr)
+			deleteAssertionsRecursive(*pathPtr)
+			if !(*backupPtr) {
+				removeBackupGoFilesRecursive(*pathPtr)
+			}
+		} else {
+			backupGoFilesLocal(*pathPtr)
+			deleteAssertionsLocal(*pathPtr)
+			if !(*backupPtr) {
+				removeBackupGoFilesLocal(*pathPtr)
+			}
+		}
 	}
 
 	fmt.Println("Done.")
@@ -63,7 +77,8 @@ func restoreGoFilesLocal(dir string) {
 			filepath := path.Join(dir, f.Name())
 			_, err = os.Stat(filepath + ".bak")
 			if err != nil {
-				panic("FATAL: No backup files found.")
+				fmt.Println("No .bak files found.")
+				return
 			}
 			err = os.Remove(filepath)
 			if err != nil {
@@ -77,7 +92,20 @@ func restoreGoFilesLocal(dir string) {
 	}
 }
 
-// backupGoFilesLocal renames go files by appending .bak
+func restoreGoFilesRecursive(root string) {
+	filepath.WalkDir(root, fs.WalkDirFunc(func(path string, d fs.DirEntry, err error) error {
+		file, err := os.Stat(path)
+		if err != nil {
+			panic(err)
+		}
+		if file.IsDir() {
+			restoreGoFilesLocal(path)
+		}
+		return err
+	}))
+}
+
+// backupGoFilesLocal renames go files by appending .bak to the filename.
 func backupGoFilesLocal(dir string) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
@@ -88,7 +116,7 @@ func backupGoFilesLocal(dir string) {
 			filepath := path.Join(dir, f.Name())
 			_, err = os.Stat(filepath + ".bak")
 			if err == nil {
-				panic("Backup files found. Please clean them first.")
+				panic("Backup files found. Please remove them first.")
 			}
 			err = os.Rename(filepath, filepath+".bak")
 			if err != nil {
@@ -98,9 +126,54 @@ func backupGoFilesLocal(dir string) {
 	}
 }
 
+func backupGoFilesRecursive(root string) {
+	filepath.WalkDir(root, fs.WalkDirFunc(func(path string, d fs.DirEntry, err error) error {
+		file, err := os.Stat(path)
+		if err != nil {
+			panic(err)
+		}
+		if file.IsDir() {
+			backupGoFilesLocal(path)
+		}
+		return err
+	}))
+}
+
+// removeBackupGoFilesLocal deletes all .go.bak files in a directory.
+func removeBackupGoFilesLocal(dir string) {
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		panic(err)
+	}
+	for _, f := range files {
+		if strings.HasSuffix(f.Name(), ".go.bak") {
+			filepath := path.Join(dir, f.Name())
+			err = os.Remove(filepath)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+}
+
+func removeBackupGoFilesRecursive(root string) {
+	filepath.WalkDir(root, fs.WalkDirFunc(func(path string, d fs.DirEntry, err error) error {
+		file, err := os.Stat(path)
+		if err != nil {
+			panic(err)
+		}
+		if file.IsDir() {
+			removeBackupGoFilesLocal(path)
+		}
+		return err
+	}))
+}
+
 // deleteAssertions truncates the original .go file, scans the backup file
 // line by line, and only writes to the .go file if it does not contain assert
-// content. It assumes the file is "well formed", i.e., a multiline import
+// content.
+//
+// It assumes the file is "well formed", i.e., a multiline import
 // statement ends with a single ')' on its own line and each assertion
 // only takes up a single line.
 func deleteAssertions(filepath string) {
@@ -116,133 +189,19 @@ func deleteAssertions(filepath string) {
 	defer outfile.Close()
 
 	lineScanner := bufio.NewScanner(infile)
-
-	// Look for "import".
-	searchCount := 0
 	line := ""
-	singleImport := true
 	for lineScanner.Scan() {
 		line = strings.TrimSpace(lineScanner.Text())
-		if len(line) >= 6 && strings.Compare(line[:6], "import") == 0 {
-			break
+		if len(line) >= 8 && strings.Compare(line[:7], "import ") == 0 {
+			line = line[7:]
 		}
-		searchCount++
-		// If not found then exit early
-		if searchCount >= 64 {
-			return
-		}
-		outfile.WriteString(lineScanner.Text() + "\n")
-	}
-	// Check for "import assert" (single import line special case).
-	if len(line) < 13 || (len(line) >= 13 && strings.Compare(line[7:13], "assert") != 0) {
-		outfile.WriteString(line + "\n")
-		singleImport = false
-	}
-	if !singleImport {
-		// Find the import line in a multi-line import block.
-		for lineScanner.Scan() {
-			line = strings.TrimSpace(lineScanner.Text())
-			// Skip over any assert statement.
-			if len(line) >= 6 && strings.Compare(line[:6], "assert") == 0 {
-				break
-			}
-			outfile.WriteString(lineScanner.Text() + "\n")
-			if len(line) > 0 && line[0] == ')' {
-				break
-			}
-		}
-	}
-	// Scan for assert code and skip.
-	for lineScanner.Scan() {
-		line = strings.TrimSpace(lineScanner.Text())
-		if len(line) >= 6 && strings.Compare(line[:6], "assert") == 0 {
+		if (len(line) >= 6 && strings.Compare(line[:6], "assert") == 0) ||
+			(len(line) >= 34 && strings.Compare(line[24:33], "go-assert") == 0) {
 			continue
 		}
 		outfile.WriteString(lineScanner.Text() + "\n")
 	}
 }
-
-// find and ignore "assert.Assert(...)\n"
-//func deleteAssertions(filepath string) {
-//	infile, err := os.Open(filepath)
-//	if err != nil {
-//		panic(err)
-//	}
-//	outfile, err := os.Create(filepath[:len(filepath)-4])
-//	if err != nil {
-//		panic(err)
-//	}
-//	defer infile.Close()
-//	defer outfile.Close()
-//
-//	reader := bufio.NewReader(infile)
-//	var b byte
-//	idx := 0
-//	for {
-//		b, err = reader.ReadByte()
-//		if err != nil && !errors.Is(err, io.EOF) {
-//			panic(err)
-//		}
-//		if errors.Is(err, io.EOF) {
-//			break
-//		}
-//		if b == byte('a') {
-//			next, err := reader.Peek(len(pattern))
-//			if err != nil {
-//				if errors.Is(err, io.EOF) {
-//					break
-//				} else {
-//					panic(err)
-//				}
-//			}
-//			// If pattern is matched then an assert has been found.
-//			// Go into 'skip over' mode and keep scanning bytes until
-//			// closing parenthesis is found (using counter).
-//			// Skip over newline, then break loop.
-//			if bytes.Compare(next, pattern) == 0 {
-//				pcount := 1
-//				_, err = reader.ReadBytes('(')
-//				if err != nil {
-//					panic(err)
-//				}
-//				for pcount != 0 {
-//					b, err := reader.ReadByte()
-//					if err != nil {
-//						panic(err)
-//					}
-//					if b == byte('(') {
-//						pcount++
-//					}
-//					if b == byte(')') {
-//						pcount--
-//					}
-//				}
-//				_, err := reader.ReadBytes('\n')
-//				if err != nil && !errors.Is(err, io.EOF) {
-//					panic(err)
-//				}
-//				if errors.Is(err, io.EOF) {
-//					break
-//				}
-//				continue
-//			}
-//		}
-//		buf[idx] = b
-//		idx++
-//		if idx == BUF_SIZE {
-//			idx = 0
-//			_, err := outfile.Write(buf)
-//			if err != nil && !errors.Is(err, io.EOF) {
-//				panic(err)
-//			}
-//			if errors.Is(err, io.EOF) {
-//				break
-//			}
-//		}
-//		//fmt.Printf("%c", b)
-//	}
-//	outfile.Write(buf[:idx])
-//}
 
 func deleteAssertionsLocal(dir string) {
 	files, err := os.ReadDir(dir)
@@ -255,4 +214,17 @@ func deleteAssertionsLocal(dir string) {
 			deleteAssertions(filepath)
 		}
 	}
+}
+
+func deleteAssertionsRecursive(root string) {
+	filepath.WalkDir(root, fs.WalkDirFunc(func(path string, d fs.DirEntry, err error) error {
+		file, err := os.Stat(path)
+		if err != nil {
+			panic(err)
+		}
+		if file.IsDir() {
+			deleteAssertionsLocal(path)
+		}
+		return err
+	}))
 }

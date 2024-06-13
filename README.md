@@ -4,32 +4,45 @@ Go Assert provides assertions and a cleanup tool for contract based programming.
 
 ## Description
 
-TODO: Finish cleanup tool
+Assertions are not a replacement for error handling. An assert is typically used
+to verify that the state of the program is valid at all times. If an unexpected invalid
+state occurs, the assert will catch the error and crash with a stack trace
+containing the invalid state.
+
+Additionally, asserts can be removed prior to release for performance. Arguably,
+asserts are no longer necessary once the program has been thoroughly tested for
+invalid state.
+
+This library also provides 'dass' (short for delete assertions), a tool which
+can safely remove assertions recursively from a given root folder.
 
 ## Getting Started
 
 ### Dependencies
 
-* Describe any prerequisites, libraries, OS version, etc., needed before installing program.
+* Go version 1.18 or higher.
 
 ### Installing
 
-* How/where to download your program
-* Any modifications needed to be made to files/folders
+```zsh
+go get github.com/jdavasligil/go-assert
+```
 
 ### Executing program
 
-* How to run the program
-* Step-by-step bullets
+By default, dass will only search locally within the current working directory
+and it will NOT preserve backups.
+
+```zsh
+go run github.com/jdavasligil/go-assert/cmd/dass
 ```
-code blocks for commands
-```
+
 
 ## Help
+For a list of options, run with the `-h` flag.
 
-Any advise for common problems or issues.
 ```
-command to run if program contains helper info
+go run github.com/jdavasligil/go-assert/cmd/dass -h
 ```
 
 ## Authors
@@ -39,11 +52,14 @@ Jaedin Davasligil
 
 ## Version History
 
-* 0.0.0 (indev)
+* 1.0.0 
 
 ## License
+The MIT License (MIT)
 
-License pending.
+Copyright (c) 2024 J. Davasligil
+
+See LICENSE.md for details.
 
 ## Acknowledgments
 
