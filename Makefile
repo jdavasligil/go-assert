@@ -1,5 +1,5 @@
 .PHONY: all
-all: fmt build run
+all: fmt build test
 
 .PHONY: fmt
 fmt:
@@ -7,11 +7,11 @@ fmt:
 
 .PHONY: build
 build:
-	@go build -o ./bin/delete_assertions ./cmd/delete_assertions.go
+	@go build -o ./bin/dass ./cmd/delete_assertions.go
 
 .PHONY: run
 run:
-	@./bin/delete_assertions
+	@./bin/das
 
 .PHONY: test
 test:

@@ -1,0 +1,27 @@
+// test is a ...
+// ...
+// ...
+
+package test
+
+// if assert is the only import statement, ignore the whole line.
+import assert "github.com/jdavasligil/go-assert" //$DELETE
+
+// import statements for assert should also be ignored
+import (
+	"strings"
+
+	assert "github.com/jdavasligil/go-assert" //$DELETE
+)
+
+// foo is always positive
+func foo(x int, y int) int {
+	assert.Assert(x <= y, struct{ x, y int }{ x, y }) //$DELETE
+	return y - x
+}
+
+// bar ensures s is large enough to pop off the front
+func bar(s string) (byte, string) {
+	assert.Assert(strings.Compare("s", s) != 0, s) //$DELETE
+	return s[0], s[1:]
+}
